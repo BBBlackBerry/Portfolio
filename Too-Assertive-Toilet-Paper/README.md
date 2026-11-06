@@ -1,77 +1,95 @@
-# Too-Assertive Toilet Paper（自己主張が強いトイレットペーパー）
+# 自己主張が強いトイレットペーパー
 
 > 自らの「命」の終わりが近づくにつれて感情をあらわにし、必死に存在を訴えかける「自己主張が強いトイレットペーパー」の物語です。
->
-> *The story of a toilet paper roll with a strong personality: as the end of its "life" gets closer, it shows more and more emotion and pleads harder to be noticed.*
 
-A small physical-computing experiment I built during a class in 2025. A toilet paper holder tracks how much paper is left. As the roll runs low, the holder gets more emotional: its face on a tiny LCD changes, it plays voice clips, and when the roll is empty it sends an email asking someone to replace it.
+2025年に授業の実験として作った、小さな電子工作の作品です。
 
-The point was to try giving an everyday object a personality, instead of just showing a number.
+トイレットペーパーホルダーが、紙があとどれくらい残っているかを数えます。紙が減るほどトイレットペーパーは感情的になり、
+
+- 小さな画面に表示される **顔** が変わる
+- **声** で話しかけてくる
+- 紙がなくなると、補充をお願いする **メール** を送ってくる
+
+という動きをします。
+
+ふだん何気なく使っている物に「性格」をもたせたら、どんなふうに感じられるだろう？ ただ数字で残りの量を表示するのではなく、トイレットペーパー自身に訴えかけさせてみよう、というのがこの作品のアイデアです。
 
 ---
 
-## How it behaves
+## どんなふうに動くの？
 
-| Paper left | Face on LCD | What else happens |
+| 紙の残り | 画面の顔 | ほかに起きること |
 |---|---|---|
-| 81–100 % | `(^o^)` | Plays a sound when a fresh roll is loaded (100 %) |
-| 51–80 % | `(^_^;)` | |
-| 21–50 % | `(o_o;)` | Plays a sound when it drops to 50 % |
-| 1–20 % | `(T_T)` | Plays a sound when it drops to 10 % |
-| 0 % | `(; ;)` | Sends an email: 「【緊急通知】TPがゼロになりました！」("Urgent: the toilet paper is gone!") |
+| 81〜100% | `(^o^)` | 新しいロールに交換したとき（100%）に音声が流れる |
+| 51〜80% | `(^_^;)` | |
+| 21〜50% | `(o_o;)` | 残りが50%になったときに音声が流れる |
+| 1〜20% | `(T_T)` | 残りが10%になったときに音声が流れる |
+| 0% | `(; ;)` | 「【緊急通知】TPがゼロになりました！」というメールが届く |
 
-- **Pulling paper.** A rotary encoder turns with the roll. Each step in one direction takes 5 % off the remaining amount; turning the other way adds 1 % (for small corrections).
-- **Replacing the roll.** Pressing the push button resets the level to 100 % and allows a new email to be sent next time.
-- **One email per roll.** It only sends again after a reset.
+- **紙を引き出すと** ロールと一緒にダイヤル（ロータリーエンコーダー）が回り、1目盛りごとに残りが5%ずつ減ります。逆向きに回すと1%ずつ増やせます（細かい調整用）。
+- **ロールを交換したら** ボタンを押すと、残りが100%に戻ります。
+- **メールは1ロールにつき1回だけ** 送られます。ボタンで100%に戻すと、次に0%になったときにまた送られます。
 
-## Hardware
+---
 
-Two microcontrollers split the work and talk over I²C:
+## 使った部品
+
+2つの小さなコンピューター（マイコン）で役割を分けています。2つは **I²C（アイ・スクエアド・シー）** という方式の配線でつながっていて、短いデータをやり取りします。
 
 ```
- ┌──────────────────────┐        I²C (ESP32 = master,       ┌────────────────────────┐
- │        ESP32         │ ◀──────  Arduino = slave @ 0x09) ─▶│      Arduino Uno       │
- │  • Wi-Fi + email     │                                    │  • Rotary encoder      │
- │  • Keeps the % level │   Arduino → ESP32: input event     │  • Push button (reset) │
- │  • Chooses the face  │   ESP32 → Arduino: "face|  NN%"    │  • 8×2 character LCD   │
- │  • APDS-9930 sensor  │                                    │  • DFPlayer Mini + spk │
- └──────────────────────┘                                    └────────────────────────┘
+ ┌──────────────────────┐                           ┌────────────────────────┐
+ │        ESP32         │  Arduino → ESP32          │        Arduino         │
+ │  （頭脳の役割）      │   「紙が引かれた」などの  │  （手足と顔の役割）    │
+ │                      │   できごとを伝える        │                        │
+ │ ・Wi-Fiでメール送信  │ ◀───────────────────────▶ │ ・ダイヤル             │
+ │ ・残りの量を覚える   │  ESP32 → Arduino          │ ・リセットボタン       │
+ │ ・どの顔にするか決める│   「顔」と「残り○%」を   │ ・小さな液晶画面       │
+ │                      │   送って表示させる        │ ・音声プレーヤーとスピーカー│
+ └──────────────────────┘                           └────────────────────────┘
 ```
 
-| Part | Role |
+| 部品 | 役割 |
 |---|---|
-| ESP32 | Main logic, Wi-Fi, sends the email through Gmail SMTP |
-| Arduino (Uno-class) | Reads the inputs, drives the LCD and sound |
-| Rotary encoder | Measures how much paper is pulled |
-| Tactile push button | "New roll" reset |
-| 8×2 character LCD (HD44780-type) | Shows the face and the percentage |
-| DFRobot DFPlayer Mini + speaker | Plays voice clips `0001`–`0003` from a microSD card |
-| APDS-9930 proximity sensor | Set up on the ESP32 but not used in the final logic |
+| ESP32 | 全体の判断をするマイコン。Wi-Fiにつながり、Gmailでメールを送る |
+| Arduino | ダイヤルとボタンを読み取り、画面と音を動かすマイコン |
+| ロータリーエンコーダー（ダイヤル） | 紙がどれだけ引き出されたかを数える |
+| 押しボタン | 「新しいロールに交換したよ」と知らせる |
+| 液晶画面（8文字×2行） | 顔と残りの%を表示する |
+| DFPlayer Mini（音声プレーヤー）＋スピーカー | microSDカードに入れた音声を再生する |
+| 近接センサー（APDS-9930） | 準備だけして、最終的には使っていない |
 
-## Code
+---
 
-| File | Runs on | What it does |
+## プログラム
+
+| ファイル | 動かす場所 | 内容 |
 |---|---|---|
-| [`task4esp32.ino`](task4esp32.ino) | ESP32 | Connects to Wi-Fi. Every 50 ms it asks the Arduino for an input event (1 = pulled, 2 = turned back, 3 = reset), updates the percentage, chooses the face, sends `face\|percentage` back to be displayed, and emails at 0 %. |
-| [`task4-arduino.ino`](task4-arduino.ino) | Arduino | I²C slave at address 9. Turns encoder and button input into events. Shows whatever the ESP32 sends, and plays the matching sound when the level crosses 100 %, 50 % or 10 %. |
-| [`credentials.example.h`](credentials.example.h) | ESP32 | Template for the Wi-Fi and Gmail settings |
+| [`task4esp32.ino`](task4esp32.ino) | ESP32 | Wi-Fiにつなぐ。0.05秒ごとにArduinoへ「何か起きた？」と聞き、残りの量を計算して顔を決め、表示する内容をArduinoへ送る。0%になったらメールを送る。 |
+| [`task4-arduino.ino`](task4-arduino.ino) | Arduino | ダイヤルとボタンの動きをESP32に伝える。ESP32から届いた顔と%を画面に出し、100%・50%・10%になったときに音声を流す。 |
+| [`credentials.example.h`](credentials.example.h) | ESP32 | Wi-FiやGmailの設定を書くためのひな形 |
 
-### Libraries
+### 使ったライブラリ（プログラムの部品集）
 
-- **ESP32:** `WiFi`, `Wire`, [`ESP_Mail_Client`](https://github.com/mobizt/ESP-Mail-Client), `APDS9930`
-- **Arduino:** `Wire`, `SoftwareSerial`, `LiquidCrystal`, [`DFRobotDFPlayerMini`](https://github.com/DFRobot/DFRobotDFPlayerMini), `RotaryEncoder`
+- **ESP32側：** `WiFi`、`Wire`、[`ESP_Mail_Client`](https://github.com/mobizt/ESP-Mail-Client)、`APDS9930`
+- **Arduino側：** `Wire`、`SoftwareSerial`、`LiquidCrystal`、[`DFRobotDFPlayerMini`](https://github.com/DFRobot/DFRobotDFPlayerMini)、`RotaryEncoder`
 
-### Setup
+### 動かし方
 
-1. Copy `credentials.example.h` to `credentials.h` and fill in your Wi-Fi name and password, plus a Gmail address and a [Gmail app password](https://support.google.com/accounts/answer/185833). `credentials.h` is git-ignored. Never commit it.
-2. Put three audio files on the DFPlayer's microSD card: `0001.mp3` (10 % left), `0002.mp3` (50 % left) and `0003.mp3` (new roll).
-3. Upload `task4-arduino.ino` to the Arduino and `task4esp32.ino` to the ESP32. Connect SDA, SCL and GND between the two boards.
+1. `credentials.example.h` をコピーして `credentials.h` という名前にし、自分のWi-Fiの名前とパスワード、Gmailのアドレス、[Gmailのアプリパスワード](https://support.google.com/accounts/answer/185833?hl=ja) を書き込みます。
+   **`credentials.h` にはパスワードが入るので、GitHubなどに絶対にアップロードしないでください。**（このフォルダでは自動的にアップロード対象から外れるよう設定しています）
+2. 音声プレーヤー用のmicroSDカードに、次の3つの音声ファイルを入れます。
+   - `0001.mp3`：残り10%のとき
+   - `0002.mp3`：残り50%のとき
+   - `0003.mp3`：新しいロールに交換したとき
+3. `task4-arduino.ino` をArduinoに、`task4esp32.ino` をESP32に書き込みます。2つのマイコンの SDA・SCL・GND をそれぞれ線でつなぎます。
 
-## Notes and limitations
+---
 
-This was a quick class experiment, not a finished product:
+## 注意点・課題
 
-- The amount left is estimated from encoder steps, not measured, so it drifts. The proximity sensor was meant to help with this but never got used.
-- In the code, the DFPlayer's software-serial pins (10, 11) are the same as two LCD data pins. These need to be moved to free pins on a real build.
-- The ESP32 waits for Wi-Fi before it does anything else. If there's no network, the device never starts.
-- The `dialogue` strings in the ESP32 code are empty placeholders for spoken lines that only exist as audio files.
+授業中の短い実験として作ったもので、完成品ではありません。
+
+- **残りの量は推測です。** 実際に紙の量を測っているのではなく、ダイヤルが回った回数から計算しているので、だんだんずれていきます。近接センサーは準備まではしていますが、最終的なプログラムでは使っていません。
+- **ピンの割り当てが重なっています。** プログラム上で、音声プレーヤーと液晶画面が同じピン（10番と11番）を使っています。実際に組み立てるときは、どちらかを空いているピンに移す必要があります。
+- **Wi-Fiがないと動きません。** ESP32は、Wi-Fiにつながるまで次の処理に進みません。
+- **セリフは音声ファイルの中だけにあります。** ESP32のプログラムにある `dialogue`（セリフ）の欄は空のままで、実際のセリフは音声ファイルとして用意しています。
