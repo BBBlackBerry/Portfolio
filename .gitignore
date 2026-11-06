@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Private research code, data and documents (not for public release)
+Research_private/
+
+# Portfolio HTML source (only the PDF is published)
+Research/portfolio.html
