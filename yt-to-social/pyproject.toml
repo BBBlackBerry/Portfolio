@@ -1,0 +1,35 @@
+[project]
+name = "yt-to-social"
+version = "0.1.0"
+description = "YouTube → X / Threads 投稿生成・配信パイプライン (Claude駆動)"
+requires-python = ">=3.11"
+dependencies = [
+  # コア
+  "anthropic>=0.39.0",
+  "python-dotenv>=1.0.1",
+  "pydantic>=2.7.0",
+  # YouTube
+  "youtube-transcript-api>=0.6.2",
+  "yt-dlp>=2024.10.7",                  # メタデータ取得 (タイトル/サムネ) + チャンネル動画一覧
+  # 就活ニュースアプリ: 記事本文のスクレイピング
+  "beautifulsoup4>=4.12.0",
+  # Web サーバー / UI
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "jinja2>=3.1.4",
+  "python-multipart>=0.0.12",
+  # 画像生成 (Google Gemini)
+  "google-genai>=0.3.0",
+  "pillow>=10.4.0",
+  # X 投稿
+  "tweepy>=4.14.0",
+  # Threads / 汎用 HTTP
+  "httpx>=0.27.0",
+  "requests>=2.32.0",
+  "ddgs>=9.14.4",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.7.0",
+]

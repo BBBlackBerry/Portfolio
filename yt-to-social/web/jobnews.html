@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>就活ニュース下書き生成 — jobnews</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #141a30;
+    --panel-2: #1b2240;
+    --text: #e7ebf5;
+    --muted: #8a93b0;
+    --accent: #2563eb;
+    --accent-2: #16a34a;
+    --danger: #dc2626;
+    --warn: #ca8a04;
+    --border: #29314f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    font-size: 14px; line-height: 1.6;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header .status { font-size: 12px; color: var(--muted); }
+  main { max-width: 980px; margin: 0 auto; padding: 24px; }
+  .toolbar {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 20px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+  }
+  button {
+    background: var(--accent); color: white; border: 0; padding: 10px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); }
+  button.success { background: var(--accent-2); }
+  button.danger { background: var(--danger); }
+  .label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .run-summary {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: var(--muted);
+  }
+  .run-summary.err { border-color: var(--danger); }
+  .run-summary b { color: var(--text); }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card.posted { opacity: 0.55; }
+  .news-title { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+  .news-title a { color: var(--text); text-decoration: none; }
+  .news-title a:hover { color: var(--accent); }
+  .meta-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .badge {
+    background: var(--panel-2); padding: 2px 8px; border-radius: 12px; font-size: 11px;
+    color: var(--muted);
+  }
+  .badge.score-hi { background: rgba(22,163,74,0.2); color: #86efac; }
+  .badge.score-mid { background: rgba(202,138,4,0.2); color: #fde68a; }
+  .badge.score-lo { background: rgba(138,147,176,0.18); color: var(--muted); }
+  .badge.video { background: rgba(37,99,235,0.2); color: #93c5fd; }
+  .badge.summary-only { background: rgba(168,85,247,0.2); color: #d8b4fe; }
+  .badge.status-posted { background: rgba(22,163,74,0.25); color: #86efac; }
+  .summary { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+  .reason { color: var(--muted); font-size: 12px; margin-bottom: 12px; font-style: italic; }
+  .video-link a { color: #93c5fd; text-decoration: none; }
+  .video-link a:hover { text-decoration: underline; }
+  .draft-block { margin-top: 12px; }
+  .draft-block .platform-label {
+    font-size: 12px; color: var(--muted); margin-bottom: 4px; display: block;
+  }
+  textarea {
+    width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; font-family: inherit; font-size: 14px;
+    line-height: 1.6; resize: vertical; min-height: 80px;
+    overflow: hidden;
+  }
+  .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 2px; }
+  .char-count.over { color: var(--danger); }
+  .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 12px 16px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+    max-width: 420px; z-index: 1000; white-space: pre-wrap; word-break: break-word;
+  }
+  .toast.success { border-color: var(--accent-2); }
+  .toast.error { border-color: var(--danger); }
+  .toast.warn { border-color: var(--warn); }
+  .toast .hint { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .loading, .empty { color: var(--muted); padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>就活ニュース下書き生成 — jobnews</h1>
+  <div class="status" id="status">loading status…</div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <button id="run-btn">就活ニュースを収集 → 下書き生成</button>
+    <button class="secondary" id="reload-btn">下書き一覧を再読込</button>
+  </div>
+
+  <div id="run-summary"></div>
+
+  <div id="results">
+    <div class="empty">「就活ニュースを収集 → 下書き生成」を押すと、DuckDuckGoニュース検索で集めた就活ニュース全件の投稿下書きが並びます。固定チャンネルの動画と関連する記事には関連動画も紐付きます。</div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function loadStatus() {
+  try {
+    const d = await (await fetch('/health')).json();
+    const flags = [];
+    if (d.dry_run) flags.push('DRY_RUN');
+    if (!d.channel_url_set) flags.push('チャンネルURL未設定');
+    if (!d.anthropic_key_set) flags.push('Anthropic未設定');
+    $('status').textContent =
+      `${d.claude_model} · ニュース: ${d.news_provider ?? 'duckduckgo'} · ` +
+      `コーパス動画${d.corpus_videos}本 · 動画ブリッジしきい値${d.relevance_threshold}` +
+      (flags.length ? ' · ' + flags.join(' · ') : '');
+  } catch (e) {
+    $('status').textContent = 'status取得失敗';
+  }
+}
+
+function toast(msg, kind='success', hint='') {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  if (hint) {
+    const h = document.createElement('span');
+    h.className = 'hint';
+    h.textContent = hint;
+    el.appendChild(h);
+  }
+  $('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), (kind === 'error' || hint) ? 12000 : 5000);
+}
+
+const charCount = (t) => [...t].length;
+const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escAttr = (s) => esc(s).replace(/"/g, '&quot;');
+
+function scoreBadge(label, score) {
+  const pct = Math.round((score || 0) * 100);
+  const cls = score >= 0.75 ? 'score-hi' : score >= 0.4 ? 'score-mid' : 'score-lo';
+  return `<span class="badge ${cls}">${label} ${pct}%</span>`;
+}
+
+// 関連動画ありは「関連度」、関連動画なしの人気ニュースまとめは専用バッジ。
+// 注目度バッジは常に表示する。
+function metaBadges(d) {
+  const parts = [];
+  if (d.matched_video_id) {
+    parts.push(scoreBadge('関連度', d.relevance_score));
+  } else {
+    parts.push('<span class="badge summary-only">関連動画なし・単独投稿</span>');
+  }
+  parts.push(scoreBadge('注目度', d.newsworthiness_score));
+  return parts.join('');
+}
+
+function draftBlock(d, platform) {
+  const text = platform === 'x' ? d.draft_x : d.draft_threads;
+  const limit = platform === 'x' ? 280 : 500;
+  const tid = `d${d.id}-${platform}`;
+  const label = platform === 'x' ? 'X (Twitter)' : 'Threads';
+  if (!text) {
+    return `<div class="draft-block"><span class="platform-label">${label}</span>
+      <div class="summary">（この媒体の下書きはありません）</div></div>`;
+  }
+  return `
+    <div class="draft-block">
+      <span class="platform-label">${label}</span>
+      <textarea id="${tid}-text" oninput="updateCount('${tid}', ${limit}); autoSize(this)">${esc(text)}</textarea>
+      <div class="char-count" id="${tid}-count">${charCount(text)} / ${limit}</div>
+      <div class="actions">
+        <button class="success" onclick="postNow(${d.id}, '${platform}', '${tid}')">${label}に投稿</button>
+        <button class="secondary" onclick="copyText('${tid}')">本文コピー</button>
+      </div>
+    </div>`;
+}
+
+function renderCard(d) {
+  const posted = d.status === 'posted';
+  return `
+    <div class="card ${posted ? 'posted' : ''}" id="card-${d.id}">
+      <h3 class="news-title"><a href="${escAttr(d.news_url)}" target="_blank">${esc(d.news_title)}</a></h3>
+      <div class="meta-row">
+        ${metaBadges(d)}
+        ${posted ? '<span class="badge status-posted">投稿済み</span>' : ''}
+        ${d.news_published ? `<span class="badge">${esc(d.news_published.slice(0, 10))}</span>` : ''}
+        ${d.matched_video_url
+          ? `<span class="badge video video-link">関連動画: <a href="${escAttr(d.matched_video_url)}" target="_blank">${esc(d.matched_video_title || d.matched_video_id)}</a></span>`
+          : ''}
+      </div>
+      <div class="summary">${esc(d.news_summary)}</div>
+      <div class="reason">判定理由: ${esc(d.relevance_reason)}</div>
+      ${draftBlock(d, 'x')}
+      ${draftBlock(d, 'threads')}
+      <div class="actions">
+        <button class="secondary" onclick="archive(${d.id})">アーカイブ（非表示）</button>
+      </div>
+    </div>`;
+}
+
+window.updateCount = (tid, limit) => {
+  const c = charCount($(`${tid}-text`).value);
+  const el = $(`${tid}-count`);
+  el.textContent = `${c} / ${limit}`;
+  el.classList.toggle('over', c > limit);
+};
+
+window.autoSize = (el) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+};
+
+function autoSizeAll(root) {
+  (root || document).querySelectorAll('textarea').forEach(window.autoSize);
+}
+
+window.copyText = (tid) => {
+  navigator.clipboard.writeText($(`${tid}-text`).value).then(() => toast('コピーしました'));
+};
+
+window.postNow = async (draftId, platform, tid) => {
+  const text = $(`${tid}-text`).value;
+  if (!confirm(`${platform.toUpperCase()} に投稿しますか?\n\n${text}`)) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '投稿中…';
+  try {
+    const d = await (await fetch('/api/post', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({draft_id: draftId, platform, text}),
+    })).json();
+    if (d.success) {
+      if (d.dry_run) {
+        toast(`[DRY_RUN] ${platform.toUpperCase()} には送信していません`, 'warn',
+              '実投稿するには .env の DRY_RUN=false にして再起動してください。');
+      } else {
+        toast(`投稿成功: ${d.url || d.post_id}`, 'success');
+        loadDrafts();
+      }
+    } else {
+      toast(`投稿失敗: ${d.error}`, 'error', d.hint || '');
+    }
+  } catch (e) {
+    toast(`投稿エラー: ${e}`, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = platform === 'x' ? 'Xに投稿' : 'Threadsに投稿';
+  }
+};
+
+window.archive = async (draftId) => {
+  try {
+    await fetch('/api/draft/status', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({draft_id: draftId, status: 'archived'}),
+    });
+    const card = $(`card-${draftId}`);
+    if (card) card.remove();
+    toast('アーカイブしました');
+  } catch (e) {
+    toast(`アーカイブ失敗: ${e}`, 'error');
+  }
+};
+
+function renderDrafts(drafts) {
+  if (!drafts.length) {
+    $('results').innerHTML = '<div class="empty">表示できる下書きがありません。</div>';
+    return;
+  }
+  $('results').innerHTML = drafts.map(renderCard).join('');
+  autoSizeAll($('results'));
+}
+
+async function loadDrafts() {
+  try {
+    const drafts = await (await fetch('/api/drafts')).json();
+    renderDrafts(drafts);
+  } catch (e) {
+    toast(`下書き取得失敗: ${e}`, 'error');
+  }
+}
+
+function renderRunSummary(d) {
+  const c = d.corpus || {};
+  const hasCorpus = Object.keys(c).length > 0;
+  const hasErr = d.errors && d.errors.length;
+  $('run-summary').className = `run-summary ${hasErr ? 'err' : ''}`;
+  $('run-summary').innerHTML =
+    (hasCorpus
+      ? `コーパス: 列挙<b>${c.listed ?? 0}</b> / 新規<b>${c.added ?? 0}</b> / 既存<b>${c.skipped ?? 0}</b>　|　`
+      : '') +
+    `ニュース取得<b>${d.news_found}</b> · 分析<b>${d.news_analyzed}</b> · ` +
+    `下書き作成<b>${d.drafts_created}</b>（うち関連動画なしの単独投稿<b>${d.summaries_created ?? 0}</b>） · ` +
+    `既出スキップ<b>${d.skipped_already_seen}</b>` +
+    (hasErr ? `<br><span style="color:#fca5a5">エラー: ${d.errors.map(esc).join(' / ')}</span>` : '');
+}
+
+async function run() {
+  $('run-btn').disabled = true;
+  $('results').innerHTML = '<div class="loading">DuckDuckGoニュース検索 → Claude分析 → 下書き生成中…<br>(1〜数分かかることがあります)</div>';
+  try {
+    const r = await fetch('/api/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || 'unknown error');
+    }
+    const d = await r.json();
+    renderRunSummary(d);
+    renderDrafts(d.drafts);
+    toast(`完了: 下書き${d.drafts_created}件を作成（うち関連動画なしの単独投稿${d.summaries_created ?? 0}件）`);
+    loadStatus();
+  } catch (e) {
+    $('results').innerHTML = `<div class="empty">エラー: ${esc(e.message)}</div>`;
+    toast(`実行失敗: ${e.message}`, 'error');
+  } finally {
+    $('run-btn').disabled = false;
+  }
+}
+
+$('run-btn').addEventListener('click', run);
+$('reload-btn').addEventListener('click', loadDrafts);
+loadStatus();
+loadDrafts();
+</script>
+</body>
+</html>

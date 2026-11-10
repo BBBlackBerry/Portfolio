@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>yt-to-social — YouTube → X / Threads</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #141a30;
+    --panel-2: #1b2240;
+    --text: #e7ebf5;
+    --muted: #8a93b0;
+    --accent: #2563eb;
+    --accent-2: #16a34a;
+    --danger: #dc2626;
+    --border: #29314f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    font-size: 14px; line-height: 1.6;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header .status { font-size: 12px; color: var(--muted); }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  .input-section { margin-bottom: 24px; }
+  .url-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .url-list input[type=text] { width: 100%; }
+  .control-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .control-row .label { gap: 8px; }
+  input[type=text], input[type=number], select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 12px; border-radius: 6px; font-size: 14px;
+  }
+  input[type=number] { width: 64px; }
+  select { padding: 8px 10px; }
+  .video-block { margin-bottom: 32px; }
+  .video-block:not(:last-child) { padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  button {
+    background: var(--accent); color: white; border: 0; padding: 10px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); }
+  button.success { background: var(--accent-2); }
+  button.danger { background: var(--danger); }
+  .label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .video-meta {
+    background: var(--panel); border: 1px solid var(--border); padding: 16px;
+    border-radius: 8px; margin-bottom: 24px; display: flex; gap: 16px;
+  }
+  .video-meta img { width: 160px; height: 90px; object-fit: cover; border-radius: 4px; }
+  .video-meta .info h2 { margin: 0 0 4px; font-size: 15px; }
+  .video-meta .info .excerpt { color: var(--muted); font-size: 12px; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 920px) { .columns { grid-template-columns: 1fr; } }
+  .col h2 {
+    margin: 0 0 12px; font-size: 14px; padding: 6px 12px; border-radius: 4px;
+    display: inline-block;
+  }
+  .col.x h2 { background: #1d1d1d; }
+  .col.threads h2 { background: #2a1d2e; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .meta-row {
+    display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+  }
+  .badge {
+    background: var(--panel-2); padding: 2px 8px; border-radius: 12px; font-size: 11px;
+    color: var(--muted);
+  }
+  .badge.trigger { background: rgba(37,99,235,0.2); color: #93c5fd; }
+  .badge.pattern { background: rgba(22,163,74,0.2); color: #86efac; }
+  textarea {
+    width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; font-family: inherit; font-size: 14px;
+    line-height: 1.6; resize: vertical; min-height: 100px;
+    overflow: hidden;
+  }
+  .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
+  .char-count.over { color: var(--danger); }
+  .image-wrap {
+    position: relative; margin-top: 12px; display: inline-block; max-width: 100%;
+  }
+  .image-preview {
+    max-width: 100%; max-height: 320px; border-radius: 4px;
+    border: 1px solid var(--border); display: block;
+  }
+  .image-wrap.busy .image-preview { opacity: 0.45; }
+  .regen-btn {
+    position: absolute; top: 6px; left: 6px;
+    background: rgba(11, 16, 32, 0.78); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 8px; font-size: 11px; line-height: 1; cursor: pointer;
+    backdrop-filter: blur(4px);
+  }
+  .regen-btn:hover { background: rgba(11, 16, 32, 0.95); }
+  .regen-btn:disabled { cursor: wait; opacity: 0.6; }
+  .image-placeholder {
+    margin-top: 12px; padding: 24px; text-align: center; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: 4px; font-size: 12px;
+    position: relative;
+  }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; padding: 12px 16px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+    max-width: 420px; z-index: 1000; white-space: pre-wrap; word-break: break-word;
+  }
+  .toast.success { border-color: var(--accent-2); }
+  .toast.error { border-color: var(--danger); }
+  .toast.warn { border-color: #ca8a04; }
+  .toast .hint { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .loading { color: var(--muted); padding: 32px; text-align: center; }
+  .empty { color: var(--muted); padding: 32px; text-align: center; }
+  details { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  details summary { cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>yt-to-social — YouTube → X / Threads</h1>
+  <div class="status" id="status">loading status…</div>
+</header>
+
+<main>
+  <div class="input-section">
+    <div class="url-list">
+      <input type="text" class="url-input" placeholder="YouTube URL #1 (必須・例: https://youtube.com/watch?v=...)">
+      <input type="text" class="url-input" placeholder="YouTube URL #2 (任意)">
+      <input type="text" class="url-input" placeholder="YouTube URL #3 (任意)">
+      <input type="text" class="url-input" placeholder="YouTube URL #4 (任意)">
+      <input type="text" class="url-input" placeholder="YouTube URL #5 (任意)">
+    </div>
+    <div class="control-row">
+      <label class="label"><input type="checkbox" id="gen-img" checked> 画像生成</label>
+      <label class="label" for="posts-per-url">1URLあたりの案数
+        <select id="posts-per-url">
+          <option value="1">1案</option>
+          <option value="2">2案</option>
+          <option value="3">3案</option>
+        </select>
+      </label>
+      <button id="gen-btn">生成</button>
+      <button id="cancel-btn" class="danger" style="display:none;">キャンセル</button>
+    </div>
+  </div>
+
+  <div id="results">
+    <div class="empty">YouTube URL を1〜5本入力して「生成」を押してください。</div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+async function loadStatus() {
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    const usingClaude = d.text_provider === 'claude';
+    const textModel = usingClaude ? d.claude_model : d.gemini_text_model;
+
+    const flags = [];
+    if (d.dry_run) flags.push('DRY_RUN');
+    if (usingClaude && !d.anthropic_key_set) flags.push('Anthropic未設定');
+    if (!d.google_key_set) flags.push('Google未設定');
+    if (!d.x_keys_set) flags.push('X未設定');
+    if (!d.threads_keys_set) flags.push('Threads未設定');
+
+    const parts = [
+      `文字処理：${textModel}`,
+      `画像生成：${d.image_model}`,
+    ];
+    $('status').textContent = parts.join(' ／ ') + (flags.length ? ' · ' + flags.join(' · ') : '');
+  } catch (e) {
+    $('status').textContent = 'status取得失敗';
+  }
+}
+
+async function ensureNotifyPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  try {
+    const p = await Notification.requestPermission();
+    return p === 'granted';
+  } catch { return false; }
+}
+
+function notifyDone(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(title, {
+      body,
+      silent: true,
+      tag: 'yt-to-social-done',
+      requireInteraction: true,
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch {}
+}
+
+function toast(msg, kind='success', hint='') {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  if (hint) {
+    const h = document.createElement('span');
+    h.className = 'hint';
+    h.textContent = hint;
+    el.appendChild(h);
+  }
+  $('toast-container').appendChild(el);
+  const ttl = (kind === 'error' || hint) ? 12000 : 5000;
+  setTimeout(() => el.remove(), ttl);
+}
+
+function charCount(text) {
+  return [...text].length;
+}
+
+window.postParams = window.postParams || {};
+
+function renderCard(post, platform, idx, prefix) {
+  const limit = platform === 'x' ? 280 : 500;
+  const id = `${prefix}-card-${platform}-${idx}`;
+  const text = post.text;
+  window.postParams[id] = {
+    platform,
+    image_prompt: post.image_prompt || '',
+    image_badge_jp: post.image_badge_jp || '',
+    image_headline_jp: post.image_headline_jp || '',
+    image_subhead_jp: post.image_subhead_jp || '',
+    image_bullets_jp: post.image_bullets_jp || [],
+    image_footer_jp: post.image_footer_jp || '',
+    image_url: post.image_url || '',
+    image_path: post.image_path || '',
+  };
+  const imageBlock = post.image_url
+    ? `<div class="image-wrap" id="${id}-imgwrap">
+         <img id="${id}-img" src="${post.image_url}" class="image-preview">
+         <button class="regen-btn" id="${id}-regen" onclick="regenerateImage('${id}')" title="画像だけ再生成">↻ 画像再生成</button>
+       </div>`
+    : `<div class="image-placeholder" id="${id}-imgwrap">
+         <button class="regen-btn" id="${id}-regen" onclick="regenerateImage('${id}')" title="画像を生成">↻ 画像生成</button>
+         画像なし<br><small>${post.image_prompt || ''}</small>
+       </div>`;
+  return `
+    <div class="card" id="${id}">
+      <div class="meta-row">
+        <span class="badge pattern">${post.pattern}</span>
+        <span class="badge trigger">${post.psychological_trigger}</span>
+      </div>
+      <textarea id="${id}-text" oninput="updateCount('${id}', ${limit}); autoSize(this)">${text}</textarea>
+      <div class="char-count" id="${id}-count">${charCount(text)} / ${limit}</div>
+      ${imageBlock}
+      <div class="actions">
+        <button class="success" onclick="postNow('${id}')">
+          ${platform === 'x' ? 'Xに投稿' : 'Threadsに投稿'}
+        </button>
+        <button class="secondary" onclick="copyText('${id}')">本文コピー</button>
+        <button class="secondary" id="${id}-open" onclick="openImage('${id}')" ${post.image_url ? '' : 'style="display:none;"'}>画像を開く</button>
+      </div>
+      <details>
+        <summary>画像プロンプト / 情報レイヤー</summary>
+        <div><b>prompt:</b> ${post.image_prompt}</div>
+        <div><b>badge:</b> ${post.image_badge_jp || ''}</div>
+        <div><b>headline:</b> ${post.image_headline_jp || ''}</div>
+        <div><b>subhead:</b> ${post.image_subhead_jp || ''}</div>
+        <div><b>bullets:</b> ${(post.image_bullets_jp || []).join(' / ')}</div>
+        <div><b>footer:</b> ${post.image_footer_jp || ''}</div>
+        ${post.image_caption_jp ? `<div><b>caption (legacy):</b> ${post.image_caption_jp}</div>` : ''}
+      </details>
+    </div>
+  `;
+}
+
+window.updateCount = (id, limit) => {
+  const text = $(`${id}-text`).value;
+  const c = charCount(text);
+  const el = $(`${id}-count`);
+  el.textContent = `${c} / ${limit}`;
+  el.classList.toggle('over', c > limit);
+};
+
+window.autoSize = (el) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+};
+
+function autoSizeAll(root) {
+  (root || document).querySelectorAll('textarea').forEach(window.autoSize);
+}
+
+window.copyText = (id) => {
+  const t = $(`${id}-text`).value;
+  navigator.clipboard.writeText(t).then(() => toast('コピーしました'));
+};
+
+window.openImage = (id) => {
+  const p = window.postParams[id];
+  if (p && p.image_url) window.open(p.image_url, '_blank');
+};
+
+window.regenerateImage = async (id) => {
+  const p = window.postParams[id];
+  if (!p) return;
+  const btn = $(`${id}-regen`);
+  const wrap = $(`${id}-imgwrap`);
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  wrap.classList.add('busy');
+  try {
+    const r = await fetch('/api/regenerate-image', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        image_prompt: p.image_prompt,
+        image_badge_jp: p.image_badge_jp,
+        image_headline_jp: p.image_headline_jp,
+        image_subhead_jp: p.image_subhead_jp,
+        image_bullets_jp: p.image_bullets_jp,
+        image_footer_jp: p.image_footer_jp,
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || '画像再生成に失敗しました');
+    }
+    const d = await r.json();
+    p.image_url = d.image_url;
+    p.image_path = d.image_path;
+
+    // プレースホルダだったカードを画像表示に切り替える / 既存画像は src を差し替える
+    const bust = `?t=${Date.now()}`;
+    let img = $(`${id}-img`);
+    if (!img) {
+      wrap.outerHTML = `<div class="image-wrap" id="${id}-imgwrap">
+        <img id="${id}-img" src="${d.image_url}${bust}" class="image-preview">
+        <button class="regen-btn" id="${id}-regen" onclick="regenerateImage('${id}')" title="画像だけ再生成">↻ 画像再生成</button>
+      </div>`;
+    } else {
+      img.src = d.image_url + bust;
+    }
+    const openBtn = $(`${id}-open`);
+    if (openBtn) openBtn.style.display = '';
+    toast('画像を再生成しました');
+  } catch (e) {
+    toast(`画像再生成失敗: ${e.message}`, 'error');
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  } finally {
+    const w = $(`${id}-imgwrap`);
+    if (w) w.classList.remove('busy');
+    const b = $(`${id}-regen`);
+    if (b) { b.disabled = false; b.textContent = '↻ 画像再生成'; }
+  }
+};
+
+window.postNow = async (id) => {
+  const params = window.postParams[id];
+  if (!params) return;
+  const { platform, image_path: imagePath, image_url: imageUrl } = params;
+  const text = $(`${id}-text`).value;
+  if (!confirm(`${platform.toUpperCase()} に投稿しますか?\n\n${text}`)) return;
+
+  // Threads は public URL が必要。ローカルの場合は image_path をサーバに渡して
+  // catbox.moe への自動アップロード経路に任せる。
+  let imagePublicUrl = '';
+  if (platform === 'threads' && imageUrl) {
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.local') || /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host);
+    if (!isLocal) {
+      imagePublicUrl = window.location.origin + imageUrl;
+    }
+  }
+
+  const btn = document.querySelector(`#${id} .success`);
+  btn.disabled = true; btn.textContent = '投稿中…';
+  try {
+    const r = await fetch('/api/post', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({platform, text, image_path: imagePath, image_public_url: imagePublicUrl}),
+    });
+    const d = await r.json();
+    if (d.success) {
+      if (d.dry_run) {
+        toast(`[DRY_RUN モード] ${platform.toUpperCase()} には送信していません`, 'warn',
+              '実投稿するには .env の DRY_RUN=false にしてサーバーを再起動してください。');
+      } else if (d.hint) {
+        toast(`投稿成功: ${d.url || d.post_id}`, 'warn', d.hint);
+      } else {
+        toast(`投稿成功: ${d.url || d.post_id}`, 'success');
+      }
+    } else {
+      toast(`投稿失敗: ${d.error}`, 'error', d.hint || '');
+    }
+  } catch (e) {
+    toast(`投稿エラー: ${e}`, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = platform === 'x' ? 'Xに投稿' : 'Threadsに投稿';
+  }
+};
+
+function renderVideoBlock(d, vIdx) {
+  const prefix = `v${vIdx}`;
+  return `
+    <div class="video-meta">
+      <img src="${d.thumbnail_url}" alt="thumbnail">
+      <div class="info">
+        <h2>動画 ${vIdx + 1}: ${d.video_title}</h2>
+        <div class="excerpt">字幕言語: ${d.language} · <a href="${d.video_url}" target="_blank" style="color:var(--muted);">${d.video_url}</a></div>
+        <div class="excerpt" style="margin-top:8px;">${d.transcript_excerpt}</div>
+      </div>
+    </div>
+    <div class="columns">
+      <div class="col x">
+        <h2>X (Twitter) — ${d.x_posts.length}投稿</h2>
+        ${d.x_posts.map((p, i) => renderCard(p, 'x', i, prefix)).join('')}
+      </div>
+      <div class="col threads">
+        <h2>Threads — ${d.threads_posts.length}投稿</h2>
+        ${d.threads_posts.map((p, i) => renderCard(p, 'threads', i, prefix)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+let currentAbort = null;
+
+async function generateOne(url, vIdx, genImg, postsPerUrl, signal) {
+  const slot = $(`vblock-${vIdx}`);
+  try {
+    const r = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, generate_images: genImg, posts_per_url: postsPerUrl}),
+      signal,
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({detail: r.statusText}));
+      throw new Error(err.detail || 'unknown error');
+    }
+    const d = await r.json();
+    slot.innerHTML = renderVideoBlock(d, vIdx);
+    autoSizeAll(slot);
+    return {ok: true};
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      slot.innerHTML = `<div class="empty">動画 ${vIdx + 1} はキャンセルされました<br><small>${url}</small></div>`;
+      return {ok: false, aborted: true};
+    }
+    slot.innerHTML = `<div class="empty">動画 ${vIdx + 1} 生成失敗: ${e.message}<br><small>${url}</small></div>`;
+    return {ok: false, error: e.message};
+  }
+}
+
+function setGenerating(on) {
+  $('gen-btn').disabled = on;
+  $('cancel-btn').style.display = on ? '' : 'none';
+}
+
+async function generate() {
+  if (currentAbort) return;  // 二重実行防止
+
+  const urls = Array.from(document.querySelectorAll('.url-input'))
+    .map(el => el.value.trim())
+    .filter(Boolean);
+  if (urls.length === 0) { toast('URLを少なくとも1つ入力してください', 'error'); return; }
+  if (urls.length > 5) { toast('URLは最大5つまでです', 'error'); return; }
+
+  const genImg = $('gen-img').checked;
+  const postsPerUrl = parseInt($('posts-per-url').value, 10) || 1;
+
+  ensureNotifyPermission();
+
+  currentAbort = new AbortController();
+  setGenerating(true);
+  $('results').innerHTML = urls.map((u, i) => `
+    <div class="video-block" id="vblock-${i}">
+      <div class="loading">動画 ${i + 1}/${urls.length} 処理中…<br><small>${u}</small></div>
+    </div>
+  `).join('');
+
+  const signal = currentAbort.signal;
+  const results = await Promise.all(
+    urls.map((u, i) => generateOne(u, i, genImg, postsPerUrl, signal))
+  );
+  const aborted = signal.aborted;
+  currentAbort = null;
+  setGenerating(false);
+
+  const okCount = results.filter(r => r.ok).length;
+  if (aborted) {
+    const msg = `キャンセルしました (成功: ${okCount}/${results.length})`;
+    toast(msg, 'warn');
+    notifyDone('yt-to-social: キャンセル', msg);
+  } else if (okCount === results.length) {
+    const msg = `${okCount}本の動画から X / Threads それぞれ ${postsPerUrl}案ずつ生成しました`;
+    toast(msg);
+    notifyDone('yt-to-social: 生成完了', msg);
+  } else if (okCount > 0) {
+    const msg = `${okCount}/${results.length} 本のみ成功しました`;
+    toast(msg, 'warn');
+    notifyDone('yt-to-social: 一部成功', msg);
+  } else {
+    const msg = 'すべての動画で生成に失敗しました';
+    toast(msg, 'error');
+    notifyDone('yt-to-social: 生成失敗', msg);
+  }
+}
+
+function cancelGenerate() {
+  if (currentAbort) {
+    currentAbort.abort();
+  }
+}
+
+$('gen-btn').addEventListener('click', generate);
+$('cancel-btn').addEventListener('click', cancelGenerate);
+document.querySelectorAll('.url-input').forEach(el => {
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      generate();
+    }
+  });
+});
+loadStatus();
+</script>
+</body>
+</html>

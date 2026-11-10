@@ -1,0 +1,26 @@
+.env
+.env.local
+*.env
+.env.json
+*.env.json
+
+__pycache__/
+*.pyc
+.venv/
+.uv/
+
+output/
+*.log
+
+.DS_Store
+.idea/
+.vscode/
+
+.claude/settings.local.json
+.ruff_cache/
+
+# caveman plugin (local-only)
+.agents/
+.claude/skills/caveman*
+.claude/skills/cavecrew
+skills-lock.json
